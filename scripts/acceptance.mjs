@@ -316,7 +316,10 @@ async function main() {
   );
 
   await api('POST', '/api/demo/scenario', { scenario: 'low_gold' });
-  const lg = await api('POST', '/api/quote', { side: 'SELL', grams: '5' });
+  // 1g, not 5g: a 5g sell exceeds the PKR 50,000 max and is correctly rejected
+  // as AMOUNT_ABOVE_MAXIMUM before any balance check runs. 1g stays inside the
+  // limits while still exceeding the 0.05g the low_gold scenario holds.
+  const lg = await api('POST', '/api/quote', { side: 'SELL', grams: '1' });
   check(
     'low gold yields INSUFFICIENT_GOLD',
     lg.status === 409 && lg.body?.error?.code === 'INSUFFICIENT_GOLD',

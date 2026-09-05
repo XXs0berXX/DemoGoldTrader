@@ -29,8 +29,25 @@ afterEach(() => {
   setPricingEngine(null);
 });
 
-async function quoteAndConfirm(body: Record<string, string>): Promise<{
-  quote: Record<string, string>;
+/**
+ * The quote fields these tests read. Declared as named properties rather than
+ * an index signature so `noUncheckedIndexedAccess` does not widen every read
+ * to `string | undefined`.
+ */
+interface QuoteBody {
+  quote_id: string;
+  side: string;
+  grams: string;
+  pkr_amount: string;
+  locked_price_pkr_per_gram: string;
+  market_reference: string;
+  guardrail_applied: boolean;
+}
+
+type TradeInput = { side: string; pkr_amount?: string; grams?: string };
+
+async function quoteAndConfirm(body: TradeInput): Promise<{
+  quote: QuoteBody;
   confirm: Record<string, unknown>;
 }> {
   const q = await client.post('/api/quote', body);
