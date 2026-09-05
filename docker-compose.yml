@@ -1,0 +1,37 @@
+# Local development dependencies only.
+# Railway provides its own managed Postgres and Redis in production.
+# Ports are deliberately off-default so this does not clash with anything already running locally.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: asasa_gold_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gold
+      POSTGRES_PASSWORD: gold
+      POSTGRES_DB: goldtrader
+    ports:
+      - "5433:5432"
+    volumes:
+      - asasa_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gold -d goldtrader"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: asasa_gold_redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  asasa_pg_data:

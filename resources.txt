@@ -1,0 +1,16 @@
+GOLD Apis:
+
+https://api.gold-api.com/price/XAU
+https://www.pakgold.pk/24k-gold-rate-in-pakistan-today-live-gold-prices-per-tola/
+https://goldprice.org/gold-price-pakistan.html
+
+Figma:
+
+https://www.figma.com/design/m060iUQuCUkoncIndWsRNX/Untitled?node-id=2-2&t=6tA002RZoYy0k4cV-0
+
+Each screen explicitly mentioned
+
+
+Railway project:
+
+https://railway.com/project/3d7a644d-3756-4868-bf51-35278bdc70f5
