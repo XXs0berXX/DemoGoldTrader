@@ -8,6 +8,9 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     include: ['tests/**/*.test.ts'],
+    setupFiles: ['tests/setup.ts'],
+    // Keep the console output of failing tests, drop the noise from passing ones.
+    silent: 'passed-only',
     // Postgres row-level locking + the singleton balances row mean parallel
     // test files would deadlock/interfere. One file at a time, deliberately.
     fileParallelism: false,
