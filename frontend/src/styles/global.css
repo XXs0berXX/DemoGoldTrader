@@ -219,6 +219,7 @@ a {
 }
 
 .page__foot {
+  order: 2;
   flex: 0 0 auto;
   padding: 12px var(--gutter) 14px;
   background: var(--paper);
@@ -228,6 +229,7 @@ a {
 /* --------------------------------------------------------------- tabbar -- */
 
 .tabbar {
+  order: 3;
   flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);

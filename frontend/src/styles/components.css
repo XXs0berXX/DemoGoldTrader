@@ -1055,9 +1055,15 @@
 /* ============================================================ demo panel = */
 
 .demolaunch {
-  position: fixed;
-  right: max(12px, calc(50vw - var(--app-max) / 2 + 12px));
-  bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom));
+  /* In the phone column's flex flow rather than floating above it. As a fixed
+     pill anchored over the tab bar it sat directly on top of the primary CTA
+     (Continue / Confirm / Done), which on a real phone would swallow taps at
+     the right end of the button. Ordering it between the scroll area and
+     .page__foot keeps it always reachable and never overlapping. */
+  order: 1;
+  align-self: flex-end;
+  flex: 0 0 auto;
+  margin: 0 12px 10px;
   z-index: 40;
   display: inline-flex;
   align-items: center;
