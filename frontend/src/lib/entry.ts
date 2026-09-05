@@ -1,0 +1,168 @@
+import type { QuoteRequest, ShortfallDetails, Side } from '../api/types';
+import type { ShortfallCode } from '../components/ShortfallNotice';
+import { GRAM_DP, PKR_DP, ceilTo, floorTo, num, parseAmount } from './convert';
+
+/** Which side of the pair the user is typing into. */
+export type EntryMode = 'PKR' | 'GRAMS';
+
+export type EntryBlock = ShortfallCode | 'AMOUNT_BELOW_MINIMUM' | 'AMOUNT_ABOVE_MAXIMUM';
+
+export interface EntryInputs {
+  side: Side;
+  mode: EntryMode;
+  /** Exactly as typed. */
+  raw: string;
+  /** Customer-facing price for this side, PKR/gram. */
+  pricePerGram: number;
+  walletPkr: number;
+  customerGoldG: number;
+  platformGoldG: number;
+  minPkr: number;
+  maxPkr: number;
+}
+
+export interface EntryResult {
+  /** Parsed amount in the unit the user is typing, or null. */
+  entered: number | null;
+  /** PKR leg of the trade (paid on BUY, received on SELL). */
+  pkr: number;
+  /** Gram leg of the trade. */
+  gramsValue: number;
+  /** True when a quote may be requested. */
+  canSubmit: boolean;
+  /** Set when something blocks the trade before we even ask the server. */
+  block: EntryBlock | null;
+  /** Populated for the three insufficiency blocks. */
+  details: ShortfallDetails;
+  /** Inline copy for limit blocks. */
+  message: string | null;
+  /** The exact body to POST to /api/quote. */
+  request: QuoteRequest | null;
+}
+
+const empty = (): EntryResult => ({
+  entered: null,
+  pkr: 0,
+  gramsValue: 0,
+  canSubmit: false,
+  block: null,
+  details: {},
+  message: null,
+  request: null,
+});
+
+/**
+ * Derives the other leg of the trade and decides whether we can quote.
+ *
+ * The conversion mirrors the server's rounding rule — always in the platform's
+ * favour — so the preview never promises more than the quote will deliver:
+ *
+ *   BUY  + PKR in    -> grams floor  (customer receives no more than they paid for)
+ *   BUY  + grams in  -> PKR   ceil   (customer pays no less than the gold costs)
+ *   SELL + grams in  -> PKR   floor  (customer is paid no more than the gold is worth)
+ *   SELL + PKR in    -> grams ceil   (customer gives up no less gold than the cash needs)
+ *
+ * These are display-only. The binding numbers arrive with the quote.
+ */
+export function evaluateEntry(inputs: EntryInputs): EntryResult {
+  const {
+    side,
+    mode,
+    raw,
+    pricePerGram,
+    walletPkr,
+    customerGoldG,
+    platformGoldG,
+    minPkr,
+    maxPkr,
+  } = inputs;
+
+  const entered = parseAmount(raw);
+  if (entered === null || entered <= 0 || !(pricePerGram > 0)) {
+    return { ...empty(), entered };
+  }
+
+  let pkr: number;
+  let gramsValue: number;
+
+  if (mode === 'PKR') {
+    pkr = floorTo(entered, PKR_DP);
+    gramsValue =
+      side === 'BUY'
+        ? floorTo(pkr / pricePerGram, GRAM_DP)
+        : ceilTo(pkr / pricePerGram, GRAM_DP);
+  } else {
+    gramsValue = floorTo(entered, GRAM_DP);
+    pkr =
+      side === 'BUY'
+        ? ceilTo(gramsValue * pricePerGram, PKR_DP)
+        : floorTo(gramsValue * pricePerGram, PKR_DP);
+  }
+
+  const request: QuoteRequest =
+    mode === 'PKR'
+      ? { side, pkr_amount: pkr.toFixed(PKR_DP) }
+      : { side, grams: gramsValue.toFixed(GRAM_DP) };
+
+  const base = { ...empty(), entered, pkr, gramsValue, request };
+
+  // Trade-size limits are checked against the PKR leg, matching the server.
+  if (pkr < minPkr) {
+    return {
+      ...base,
+      block: 'AMOUNT_BELOW_MINIMUM',
+      message: `Minimum trade is Rs. ${minPkr.toLocaleString('en-US')}.`,
+    };
+  }
+  if (pkr > maxPkr) {
+    return {
+      ...base,
+      block: 'AMOUNT_ABOVE_MAXIMUM',
+      message: `Maximum trade is Rs. ${maxPkr.toLocaleString('en-US')}.`,
+    };
+  }
+
+  // Balance guards. Blocked here so the user is not sent to a quote that can
+  // only be rejected — the server enforces the same rules authoritatively.
+  if (side === 'BUY') {
+    if (pkr > walletPkr) {
+      return {
+        ...base,
+        block: 'INSUFFICIENT_PKR',
+        details: {
+          required: pkr.toFixed(PKR_DP),
+          available: walletPkr.toFixed(PKR_DP),
+          shortfall: (pkr - walletPkr).toFixed(PKR_DP),
+        },
+      };
+    }
+    if (gramsValue > platformGoldG) {
+      return {
+        ...base,
+        block: 'INSUFFICIENT_INVENTORY',
+        details: {
+          required: gramsValue.toFixed(GRAM_DP),
+          available: platformGoldG.toFixed(GRAM_DP),
+          shortfall: (gramsValue - platformGoldG).toFixed(GRAM_DP),
+        },
+      };
+    }
+  } else if (gramsValue > customerGoldG) {
+    return {
+      ...base,
+      block: 'INSUFFICIENT_GOLD',
+      details: {
+        required: gramsValue.toFixed(GRAM_DP),
+        available: customerGoldG.toFixed(GRAM_DP),
+        shortfall: (gramsValue - customerGoldG).toFixed(GRAM_DP),
+      },
+    };
+  }
+
+  return { ...base, canSubmit: true };
+}
+
+/** Convenience wrapper so callers can pass raw server strings. */
+export function toNumbers(...values: Array<string | number | null | undefined>): number[] {
+  return values.map(num);
+}
