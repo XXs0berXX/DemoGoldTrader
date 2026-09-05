@@ -44,7 +44,34 @@ each is implemented exactly as stated here.
 
 ## What was built
 
-*(filled in at the end of the build — see the section below)*
+A single Railway service running a persistent Node process that serves both the JSON API and the
+built React SPA, backed by managed Postgres and Redis.
+
+**Backend** (`backend/`, TypeScript strict, Express)
+- Pricing engine with two source adapters behind one interface, normalized to PKR/gram 24K, a 300s
+  Redis cache, a single-flight lock against cache stampede, and a sanity band that discards
+  implausible values before they can reach a quote.
+- Redis-backed quote store, 75s TTL, `expires_at` inside the payload, one active quote per session.
+- Settlement in a single Postgres transaction with `SELECT … FOR UPDATE`, an append-only `trades`
+  ledger, a `UNIQUE` idempotency key, and `CHECK (… >= 0)` on all three balances.
+- `POST /api/demo/*` reviewer controls for source failure, guardrail override and balance scenarios.
+
+**Frontend** (`frontend/`, React + Vite, hand-written CSS, no UI kit)
+- The five-step journey rendered against Asasa's own screens: Home balance card, Buy/Sell entry with
+  PKR↔grams conversion, Review with the locked-price countdown, and a receipt-styled Success screen.
+- A countdown recomputed from the server's `expires_at` on every tick, so a throttled background tab
+  cannot drift away from server truth.
+- A clearly-labelled demo controls sheet exposing every stress case.
+
+**Verification**
+- 99 backend tests (unit + integration against real Postgres and Redis) and 46 frontend tests.
+- `scripts/acceptance.mjs`, an independent end-to-end harness: 73 checks against a running server,
+  re-deriving every number itself and fetching the upstream feeds directly to confirm the served
+  rate is real.
+- The suites were checked for vacuousness by mutation. Removing the fast-path duplicate check still
+  passes — which proves the `UNIQUE`/23505 backstop genuinely carries single settlement rather than
+  being decorative — while disabling both idempotency guards fails, and breaking gold conservation
+  fails.
 
 ---
 
@@ -141,4 +168,23 @@ independent acceptance harness before merging anything.
 
 ## Known gaps and things I would do next
 
-*(filled in at the end of the build)*
+Honest about what is not there:
+
+- **Balances are global, quotes are per-session.** Two reviewers hitting the deployed URL at once
+  share one wallet, so they can surprise each other. This is the documented reading of "single-user,
+  no auth", and quotes are isolated so nobody can settle someone else's locked price — but a
+  per-session ledger would be the real fix.
+- **The FX rate is a single point of failure for the primary source.** PakGold's method needs
+  USD→PKR, and only `open.er-api.com` supplies it. If that FX endpoint fails the primary source
+  fails with it and the system falls back to GoldPrice.org, which is correct behaviour but means the
+  primary is effectively two dependencies, not one. A second FX source would make the primary as
+  resilient as the fallback.
+- **No rate limiting on the demo endpoints.** They are public on a public URL. For a demo that is
+  the point, but anyone can re-seed the balances at any time.
+- **The 23505 idempotency handler is unreachable in normal operation.** The row lock serialises
+  confirms, so the fast path catches every duplicate. It is deliberate defence-in-depth and it is
+  proven to work when the fast path is removed, but it is not exercised by the ordinary flow.
+- **Rate history is in-memory and per-browser.** The sparkline builds only while the page is open;
+  it is not a real price history series.
+- **No structured logging or metrics.** Fine for a demo, the first thing I would add for anything
+  real.
