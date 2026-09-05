@@ -4,6 +4,7 @@ import { invalidRequest } from '../../errors';
 import { D, fmtPkr, parseDecimal } from '../../money';
 import { balancesToWire, writeBalances } from '../../db/balances';
 import { getPricingEngine } from '../../pricing/engine';
+import { clearHistoryCache } from '../../pricing/history';
 import {
   clearGuardrailOverride,
   getDemoStatus,
@@ -47,8 +48,10 @@ demoRouter.post('/demo/source-failure', async (req: Request, res: Response) => {
     throw invalidRequest(`mode must be one of: ${SOURCE_FAILURE_MODES.join(', ')}.`);
   }
   await setSourceFailureMode(parsed.data.mode);
-  // Flush the cache so the toggle is observable immediately rather than in 5 min.
-  await getPricingEngine().invalidate();
+  // Flush both caches so the toggle is observable immediately rather than in 5
+  // min. History is flushed too, otherwise a reviewer who kills the sources
+  // would still see a live-looking chart next to a paused price.
+  await Promise.all([getPricingEngine().invalidate(), clearHistoryCache()]);
 
   res.set('Cache-Control', 'no-store');
   res.json({ ...(await getDemoStatus()), price: await currentPriceWire() });

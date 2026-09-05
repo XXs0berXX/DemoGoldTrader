@@ -368,6 +368,57 @@ async function main() {
   const deep = await fetch(BASE + '/buy');
   check('SPA deep link falls back to index.html', deep.status === 200, `status=${deep.status}`);
 
+  // ------------------------------------------------------------- history
+  section('11. Rate history (1D / 1W / 1M / 1Y)');
+  const ranges = ['1D', '1W', '1M', '1Y'];
+  const seen = {};
+  for (const r of ranges) {
+    const h = await api('GET', `/api/price/history?range=${r}`);
+    const b = h.body || {};
+    check(`GET /api/price/history?range=${r} returns 200`, h.status === 200, `status=${h.status}`);
+    check(`${r} returns a real series, not a single point`, (b.points || []).length >= 2, `points=${(b.points || []).length}`);
+    check(`${r} is sourced from goldprice`, b.source === 'goldprice', `source=${b.source}`);
+
+    const vals = (b.points || []).map((p) => num(p.v));
+    const allSane = vals.every((v) => v > 5000 && v < 500000);
+    check(`${r} values are plausible PKR/gram`, allSane && vals.length > 0, `lo=${fmt(Math.min(...vals))} hi=${fmt(Math.max(...vals))}`);
+
+    // The whole point of this feature: the line must not be flat.
+    const distinct = new Set(vals.map((v) => v.toFixed(2))).size;
+    check(`${r} is not a flat line`, distinct > 2, `${distinct} distinct values across ${vals.length} points`);
+
+    check(
+      `${r} high/low bracket every plotted point`,
+      num(b.high) >= Math.max(...vals) - 0.01 && num(b.low) <= Math.min(...vals) + 0.01,
+      `high=${fmt(num(b.high))} low=${fmt(num(b.low))}`,
+    );
+
+    const times = (b.points || []).map((p) => Date.parse(p.t));
+    check(`${r} points are in chronological order`, times.every((t, i) => i === 0 || t > times[i - 1]));
+    check(`${r} ends at or before now`, times[times.length - 1] <= Date.now() + 60_000);
+    seen[r] = { span: (times[times.length - 1] - times[0]) / 86400000, n: vals.length };
+  }
+  check(
+    '1Y covers a longer span than 1M, which covers longer than 1D',
+    seen['1Y'].span > seen['1M'].span && seen['1M'].span > seen['1D'].span,
+    `1D=${seen['1D'].span.toFixed(2)}d 1M=${seen['1M'].span.toFixed(1)}d 1Y=${seen['1Y'].span.toFixed(0)}d`,
+  );
+  const badRange = await api('GET', '/api/price/history?range=10Y');
+  check(
+    'an unsupported range is rejected rather than silently substituted',
+    badRange.status === 400 && badRange.body?.error?.code === 'INVALID_REQUEST',
+    `status=${badRange.status} code=${badRange.body?.error?.code}`,
+  );
+
+  await api('POST', '/api/demo/source-failure', { mode: 'both' });
+  const hPaused = await api('GET', '/api/price/history?range=1M');
+  check(
+    'history hides itself when both sources are forced down',
+    hPaused.body?.unavailable === true,
+    `unavailable=${hPaused.body?.unavailable}`,
+  );
+  await api('POST', '/api/demo/source-failure', { mode: 'none' });
+
   await resetToNormal();
 
   // ------------------------------------------------------------- summary

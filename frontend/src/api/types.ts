@@ -146,3 +146,33 @@ export interface ApiErrorBody {
     details?: Record<string, unknown>;
   };
 }
+
+// --------------------------------------------------------------- history --
+
+export type HistoryRange = '1D' | '1W' | '1M' | '1Y';
+
+export const HISTORY_RANGES: readonly HistoryRange[] = ['1D', '1W', '1M', '1Y'];
+
+export interface HistoryPoint {
+  /** ISO-8601 instant. */
+  t: string;
+  /** PKR per gram, 24K. */
+  v: string;
+}
+
+export interface HistorySeries {
+  range: HistoryRange;
+  points: HistoryPoint[];
+  open: string | null;
+  close: string | null;
+  high: string | null;
+  low: string | null;
+  change_pct: string | null;
+  source: PriceSource | null;
+  granularity: string;
+  /** Intraday ranges come from an undated upstream array; see the server. */
+  approximate_timestamps: boolean;
+  as_of: string | null;
+  unavailable: boolean;
+  reason: string | null;
+}

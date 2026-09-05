@@ -407,17 +407,6 @@
   font-weight: 700;
 }
 
-.rangetabs {
-  display: flex;
-  gap: var(--sp-4);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink-400);
-}
-
-.rangetabs__item[aria-pressed='true'] {
-  color: var(--accent-700);
-}
 
 /* ================================================================= banner = */
 
@@ -1284,4 +1273,116 @@
 
 .banner-mt {
   margin-top: var(--sp-4);
+}
+
+/* ------------------------------------------------------------ rate chart -- */
+
+.chart {
+  margin-top: var(--sp-4);
+}
+
+.chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.chart__delta {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.chart__delta--up {
+  color: var(--accent-700);
+}
+
+.chart__delta--down {
+  color: var(--danger-700);
+}
+
+.chart__delta--flat {
+  color: var(--ink-400);
+  font-weight: 600;
+}
+
+.chart__delta-range {
+  font-weight: 600;
+  color: var(--ink-400);
+}
+
+/* The 1D / 1W / 1M / 1Y selector, mirroring Asasa's home screen. */
+.rangetabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.rangetabs__btn {
+  min-width: 34px;
+  padding: 5px 9px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-400);
+  background: transparent;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.rangetabs__btn:hover {
+  color: var(--ink-700);
+}
+
+.rangetabs__btn--on {
+  color: var(--accent-700);
+  background: var(--paper);
+  box-shadow: 0 1px 2px rgba(26, 31, 27, 0.12);
+}
+
+.chart__body {
+  min-height: 84px;
+}
+
+.chart__svg {
+  display: block;
+  transition: opacity 160ms ease;
+}
+
+.chart__svg--loading {
+  opacity: 0.45;
+}
+
+.chart__legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.chart__hi {
+  color: var(--accent-700);
+  font-weight: 700;
+}
+
+.chart__lo {
+  color: var(--danger-700);
+  font-weight: 700;
+}
+
+.chart__empty {
+  margin: 0;
+  padding: var(--sp-3) 0;
+}
+
+.chart__source {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-400);
 }

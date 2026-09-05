@@ -1,5 +1,5 @@
 import { Banner } from '../components/Banner';
-import { Sparkline } from '../components/Sparkline';
+import { RateChart } from '../components/RateChart';
 import { FreshnessLine, SourceTag } from '../components/SourceTag';
 import {
   BuyGoldIcon,
@@ -26,7 +26,7 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
-  const { price, state, history, tradingEnabled, now, connectionError } = useAppData();
+  const { price, state, tradingEnabled, now, connectionError } = useAppData();
 
   const balances = state?.balances;
   const goldG = num(balances?.customer_gold_g);
@@ -201,7 +201,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
           </Banner>
         ) : null}
 
-        <Sparkline points={history} />
+        <RateChart />
       </section>
     </div>
   );

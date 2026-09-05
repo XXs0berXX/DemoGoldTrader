@@ -156,6 +156,41 @@ The frontend switches on `code`; `message` is safe to display verbatim.
 }
 ```
 
+### `GET /api/price/history?range=1D|1W|1M|1Y`
+
+Rate history for the home-screen chart. Read-only: it never gates trading.
+
+```jsonc
+{
+  "range": "1M",
+  "points": [{ "t": "2026-08-06T04:00:00.000Z", "v": "37847.63" }],
+  "open": "37847.63", "close": "39485.37",
+  "high": "41399.00", "low": "37847.63",
+  "change_pct": "4.33",
+  "source": "goldprice",
+  "granularity": "daily close",
+  "approximate_timestamps": false,   // true for 1D/1W — see below
+  "as_of": "2026-09-04T04:00:00.000Z",
+  "unavailable": false,
+  "reason": null
+}
+```
+
+Sourced from GoldPrice.org, the only one of the two upstreams that publishes history
+(gold-api.com gates `/history/XAU` behind a key — it answers `401`):
+
+| Range | Upstream | Notes |
+|---|---|---|
+| `1D`, `1W` | `GetData/PKR-XAU/0` | Live intraday array, PKR/troy-oz. **Carries no timestamps**, so points are spread evenly across the window; values are exact, x-axis instants are approximate (`approximate_timestamps: true`). Consecutive duplicates are upstream padding and are collapsed. |
+| `1M`, `1Y` | `GetDataHistorical/PKR-XAU/0` | Daily closes back to 1998, PKR/troy-oz, **with** timestamps (`value × 100` = unix seconds). |
+
+Both are divided by `31.1034768` — the same normalization as the live price, and no FX leg
+is needed because GoldPrice already quotes PKR. Cached in Redis per range
+(1D 300s · 1W 900s · 1M 1h · 1Y 6h) and flushed when the demo source-failure toggle changes.
+
+An unfetchable series returns `200` with `unavailable: true` and a `reason`, never an error —
+a broken chart must not look like a broken product. An unknown `range` is `400 INVALID_REQUEST`.
+
 ### `POST /api/quote`
 
 ```jsonc

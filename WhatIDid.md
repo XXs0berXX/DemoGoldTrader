@@ -61,11 +61,14 @@ built React SPA, backed by managed Postgres and Redis.
   PKR↔grams conversion, Review with the locked-price countdown, and a receipt-styled Success screen.
 - A countdown recomputed from the server's `expires_at` on every tick, so a throttled background tab
   cannot drift away from server truth.
+- A 1D / 1W / 1M / 1Y rate chart with the range selector, high/low and change from Asasa's home
+  screen, drawn from real GoldPrice.org history.
+- The Asasa mark from the brand Figma used verbatim as the app logo and favicon.
 - A clearly-labelled demo controls sheet exposing every stress case.
 
 **Verification**
-- 99 backend tests (unit + integration against real Postgres and Redis) and 46 frontend tests.
-- `scripts/acceptance.mjs`, an independent end-to-end harness: 73 checks against a running server,
+- 119 backend tests (unit + integration against real Postgres and Redis) and 57 frontend tests.
+- `scripts/acceptance.mjs`, an independent end-to-end harness: 108 checks against a running server,
   re-deriving every number itself and fetching the upstream feeds directly to confirm the served
   rate is real.
 - The suites were checked for vacuousness by mutation. Removing the fast-path duplicate check still
@@ -97,6 +100,34 @@ immediately. The acceptance harness asserts this agreement on every run rather t
 
 Prices are fetched **server-side only**, cached in Redis with a 300s TTL, and the refresh is guarded
 by a single-flight lock so a burst of traffic causes one upstream fetch, not a stampede.
+
+### Rate history: the chart had to be real, or not exist
+
+The first cut drew only the samples the open page had seen, which is a flat line — honest, but
+useless. The obvious fix was a third-party market-data API, and I nearly reached for one. Before
+doing that I went back through the supplied sources properly:
+
+- **gold-api.com** — `/history/XAU` exists but answers **401**; history is behind a paid key.
+- **pakgold.pk** — holds no data of its own; its page computes from gold-api + er-api in the browser
+  and its chart is an embedded TradingView widget.
+- **goldprice.org** — its rendered PNG charts are a dead end, but reading the Highstock config in
+  `gpx-highcharts-2.js` turned up the endpoint the interactive chart actually calls:
+  `GetDataHistorical/`.
+
+That last one is the whole feature. `GetDataHistorical/PKR-XAU/0` returns **daily closes back to
+1998** with timestamps encoded as `value × 100` unix seconds, and `GetData/PKR-XAU/0` returns a live
+intraday tail. Both are already **PKR per troy ounce**, so the chart needs no FX leg and no extra
+vendor — the only normalisation is the same `÷ 31.1034768` the live price uses, against the same
+instrument as our fallback source.
+
+Two things I made sure to be honest about rather than paper over:
+
+- The intraday array carries **no timestamps**. Its values are exact; its x-axis is not. Points are
+  distributed evenly across the window, the API flags `approximate_timestamps: true`, and the UI
+  prints "intraday points are evenly spaced" under the chart.
+- If the history cannot be fetched, the API returns `200` with `unavailable: true` and a reason
+  rather than an error, and the chart says so while explicitly noting the live rate is unaffected.
+  **A broken chart must never look like a broken product**, and history never gates trading.
 
 ### Trading pauses rather than lying
 
@@ -184,7 +215,8 @@ Honest about what is not there:
 - **The 23505 idempotency handler is unreachable in normal operation.** The row lock serialises
   confirms, so the fast path catches every duplicate. It is deliberate defence-in-depth and it is
   proven to work when the fast path is removed, but it is not exercised by the ordinary flow.
-- **Rate history is in-memory and per-browser.** The sparkline builds only while the page is open;
-  it is not a real price history series.
+- **The 1D and 1W chart points are evenly spaced, not precisely timed.** GoldPrice's intraday array
+  ships values without timestamps, so the shape and the values are exact but the x-axis instants are
+  interpolated across the window. The UI says so. 1M and 1Y carry real timestamps.
 - **No structured logging or metrics.** Fine for a demo, the first thing I would add for anything
   real.

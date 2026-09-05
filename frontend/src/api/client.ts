@@ -10,6 +10,8 @@ import type {
   ShortfallDetails,
   SourceFailureMode,
   StateResponse,
+  HistoryRange,
+  HistorySeries,
 } from './types';
 
 /**
@@ -114,6 +116,9 @@ export const api = {
   getPrice: (): Promise<PriceResponse> => request<PriceResponse>('/api/price'),
 
   getState: (): Promise<StateResponse> => request<StateResponse>('/api/state'),
+
+  getHistory: (range: HistoryRange): Promise<HistorySeries> =>
+    request<HistorySeries>(`/api/price/history?range=${range}`),
 
   createQuote: (req: QuoteRequest): Promise<Quote> =>
     postJson<Quote>('/api/quote', req),

@@ -3,6 +3,7 @@ import { ApiError } from './errors';
 import { config } from './config';
 import { sessionMiddleware } from './http/session';
 import { priceRouter } from './http/routes/price';
+import { historyRouter } from './http/routes/history';
 import { stateRouter } from './http/routes/state';
 import { quoteRouter } from './http/routes/quote';
 import { confirmRouter } from './http/routes/confirm';
@@ -29,6 +30,7 @@ export function createApp(opts: CreateAppOptions = {}): Express {
 
   app.use('/api', healthRouter);
   app.use('/api', priceRouter);
+  app.use('/api', historyRouter);
   app.use('/api', stateRouter);
   app.use('/api', quoteRouter);
   app.use('/api', confirmRouter);

@@ -20,6 +20,7 @@ people who want to run or inspect it.
 | **Locked quotes** | 75-second, server-owned quote with a visible countdown. The server validates expiry against the stored `expires_at` — the client clock is never the authority |
 | **Atomic settlement** | One Postgres transaction: row lock → re-verify → append immutable trade → update three balances → commit or roll back entirely |
 | **Idempotent confirm** | A `UNIQUE` constraint on the quote id means pressing Confirm twice creates exactly one trade and returns the same receipt |
+| **Rate history** | A 1D / 1W / 1M / 1Y chart of the market reference, sourced from GoldPrice.org's own daily and intraday feeds and normalized the same way as the live rate |
 | **Reviewer controls** | A demo panel to force source failures, engage the guardrail, and re-seed to low-cash / low-gold / low-inventory scenarios — no code changes needed |
 
 ---
@@ -129,6 +130,7 @@ The same controls are available over HTTP (`POST /api/demo/*`) if you prefer cur
 |---|---|
 | `GET /api/price` | Normalized rate, customer buy/sell prices, source, freshness, trading-enabled flag |
 | `GET /api/state` | Seeded balances, limits, recent trades |
+| `GET /api/price/history` | Rate history for the chart — `?range=1D\|1W\|1M\|1Y` |
 | `POST /api/quote` | Issue a 75s locked quote (side + PKR **or** grams) |
 | `POST /api/confirm` | Settle a quote idempotently, returns the receipt |
 | `POST /api/demo/*` | Reviewer stress controls |
