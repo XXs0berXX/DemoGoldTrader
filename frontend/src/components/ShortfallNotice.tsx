@@ -26,12 +26,12 @@ interface ShortfallNoticeProps {
  * The three insufficiency states, each rendered with the **actual shortfall**
  * rather than a generic failure.
  *
- * `INSUFFICIENT_INVENTORY` is deliberately worded as the platform running out
- * of gold, not as something the customer did wrong — it is our constraint, and
- * saying otherwise would be dishonest.
+ * `INSUFFICIENT_INVENTORY` is deliberately worded as the platform being unable
+ * to source the gold, not as something the customer did wrong — it is our
+ * constraint, and saying otherwise would be dishonest. It is also the only one
+ * of the three that is worth retrying unchanged, so the copy says so.
  *
- * Used by both the pre-quote client check and the server error path, so the two
- * can never drift apart.
+ * Every one of these arrives from the server. The client does not predict them.
  */
 export function ShortfallNotice({
   code,
@@ -76,18 +76,17 @@ export function ShortfallNotice({
   }
 
   return (
-    <Banner tone="shortfall" title="We’re out of gold to sell right now" role="alert">
+    <Banner tone="shortfall" title="We can’t source that much gold right now" role="alert">
+      We’re unable to procure gold at this moment due to demand — please try again in a
+      bit. This is our limit, not yours, so nothing is wrong with your order.
       {haveNumbers ? (
-        <>
-          Asasa’s inventory holds <strong className="num">{grams(available)}</strong>, and
-          this order needs <strong className="num">{grams(required)}</strong> — we are{' '}
-          <strong className="num">{grams(shortfall)}</strong> short. This is our limit, not
-          yours; a smaller order will go through.
-        </>
-      ) : (
-        (fallbackMessage ??
-          'Asasa does not currently hold enough gold to fill this order. This is our limit, not yours.')
-      )}
+        <span className="banner__detail">
+          Available now <strong className="num">{grams(available)}</strong> · this order
+          needs <strong className="num">{grams(required)}</strong> · short by{' '}
+          <strong className="num">{grams(shortfall)}</strong>. A smaller order will go
+          through immediately.
+        </span>
+      ) : null}
     </Banner>
   );
 }

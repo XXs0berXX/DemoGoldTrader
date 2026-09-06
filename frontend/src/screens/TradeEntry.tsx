@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ApiError } from '../api/client';
 import type { QuoteRequest, Side } from '../api/types';
 import { Banner } from '../components/Banner';
@@ -19,9 +19,17 @@ interface TradeEntryProps {
   /** Server rejection of the last quote attempt, if any. */
   error: ApiError | null;
   onSubmit: (req: QuoteRequest) => void;
+  /** Drops a stale rejection once the amount it referred to has changed. */
+  onClearError: () => void;
 }
 
-export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JSX.Element {
+export function TradeEntry({
+  side,
+  busy,
+  error,
+  onSubmit,
+  onClearError,
+}: TradeEntryProps): JSX.Element {
   const { price, state, tradingEnabled } = useAppData();
   const [mode, setMode] = useState<EntryMode>(side === 'BUY' ? 'PKR' : 'GRAMS');
   const [raw, setRaw] = useState('');
@@ -30,10 +38,12 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
   const pricePerGram = num(isBuy ? price?.buy_pkr_per_gram : price?.sell_pkr_per_gram);
   const walletPkr = num(state?.balances.pkr_wallet);
   const customerGoldG = num(state?.balances.customer_gold_g);
-  const platformGoldG = num(state?.balances.platform_gold_g);
   const minPkr = num(state?.limits.min_pkr) || 1000;
   const maxPkr = num(state?.limits.max_pkr) || 50000;
 
+  /* The customer's own wallet and holdings are checked here so the reason lands
+     instantly. Platform inventory is not — that answer only ever comes from the
+     server, because only the server knows it is still true. */
   const result = useMemo(
     () =>
       evaluateEntry({
@@ -43,22 +53,18 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
         pricePerGram,
         walletPkr,
         customerGoldG,
-        platformGoldG,
         minPkr,
         maxPkr,
       }),
-    [
-      side,
-      mode,
-      raw,
-      pricePerGram,
-      walletPkr,
-      customerGoldG,
-      platformGoldG,
-      minPkr,
-      maxPkr,
-    ],
+    [side, mode, raw, pricePerGram, walletPkr, customerGoldG, minPkr, maxPkr],
   );
+
+  /* A shortfall answer belongs to the amount that produced it. The moment the
+     user changes that amount the banner is stale, so it goes. */
+  function edit(next: string): void {
+    setRaw(next);
+    onClearError();
+  }
 
   /* The green pill mirrors the reference screen. Its clock is the time until
      the *server* refreshes its cached market reference — a real number, not a
@@ -72,7 +78,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
   }, [price?.fetched_at, price?.age_seconds, price?.ttl_seconds]);
   const refresh = useCountdown(tradingEnabled ? refreshAt : null);
 
-  const maxBuy = maxBuyPkr(walletPkr, platformGoldG, pricePerGram, maxPkr);
+  const maxBuy = maxBuyPkr(walletPkr, pricePerGram, maxPkr);
   const maxBuyGrams = pricePerGram > 0 ? floorTo(maxBuy / pricePerGram, 4) : 0;
   const maxSell = maxSellGrams(customerGoldG, pricePerGram, maxPkr);
 
@@ -82,6 +88,40 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
   const block = result.block;
   const clientShortfallCode =
     serverShortfallCode === null && block !== null && isShortfallCode(block) ? block : null;
+
+  /* Why Continue is unavailable, said in one line right beside the button. A
+     disabled control with no adjacent reason is the thing we are avoiding. */
+  const blockedReason = ((): string | null => {
+    // A paused market already has its own banner; do not say it twice.
+    if (!tradingEnabled || busy) return null;
+    if (result.block === 'INSUFFICIENT_PKR') {
+      return `Your wallet holds ${rs(walletPkr)} — not enough for this trade. Lower the amount or top up.`;
+    }
+    if (result.block === 'INSUFFICIENT_GOLD') {
+      return `You hold ${formatGrams(customerGoldG)} g — not enough for this sale. Sell a smaller amount.`;
+    }
+    if (result.message) return result.message;
+    return null;
+  })();
+
+  /* An empty field is not an error, so it gets a neutral prompt rather than the
+     red "here is what is wrong" treatment. */
+  const emptyHint =
+    tradingEnabled && !busy && (result.entered === null || result.entered <= 0)
+      ? `Enter an amount between ${rs(minPkr)} and ${rs(maxPkr)} to continue.`
+      : null;
+
+  /* A rejection the user has to scroll to find is a rejection they did not get.
+     When the server answers, bring its answer to them. */
+  const noticeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = noticeRef.current;
+    // Guarded: not every environment implements scrollIntoView, and failing to
+    // scroll must never take the rejection itself down with it.
+    if (error && typeof el?.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
 
   const pkrLabel = isBuy ? 'You pay' : 'You receive';
   const goldLabel = isBuy ? 'You receive' : 'You sell';
@@ -112,7 +152,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               aria-label={`${pkrLabel} in PKR`}
               value={raw}
               disabled={!tradingEnabled}
-              onChange={(e) => setRaw(e.target.value)}
+              onChange={(e) => edit(e.target.value)}
             />
           </div>
         ) : (
@@ -157,7 +197,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               aria-label={`${goldLabel} in grams`}
               value={raw}
               disabled={!tradingEnabled}
-              onChange={(e) => setRaw(e.target.value)}
+              onChange={(e) => edit(e.target.value)}
             />
             <span className="field__suffix">g</span>
           </div>
@@ -194,7 +234,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               aria-pressed={mode === 'PKR'}
               onClick={() => {
                 setMode('PKR');
-                setRaw('');
+                edit('');
               }}
             >
               PKR
@@ -205,7 +245,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               aria-pressed={mode === 'GRAMS'}
               onClick={() => {
                 setMode('GRAMS');
-                setRaw('');
+                edit('');
               }}
             >
               Grams
@@ -271,7 +311,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               aria-pressed={mode === 'PKR' && num(raw) === c}
               onClick={() => {
                 setMode('PKR');
-                setRaw(String(c));
+                edit(String(c));
               }}
             >
               {rs(c)}
@@ -284,7 +324,7 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               disabled={!tradingEnabled}
               onClick={() => {
                 setMode('GRAMS');
-                setRaw(maxSell.toFixed(4));
+                edit(maxSell.toFixed(4));
               }}
             >
               Max {formatGrams(maxSell, 3)} g
@@ -300,27 +340,29 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
           </div>
         ) : null}
 
-        {serverShortfallCode && error ? (
-          <div className="banner-mt">
-            <ShortfallNotice
-              code={serverShortfallCode}
-              details={error.shortfall}
-              fallbackMessage={error.message}
-            />
-          </div>
-        ) : null}
+        <div ref={noticeRef}>
+          {serverShortfallCode && error ? (
+            <div className="banner-mt">
+              <ShortfallNotice
+                code={serverShortfallCode}
+                details={error.shortfall}
+                fallbackMessage={error.message}
+              />
+            </div>
+          ) : null}
 
-        {error && !serverShortfallCode && error.code !== 'TRADING_PAUSED' ? (
-          <Banner tone="shortfall" title="We couldn’t lock a price" role="alert" className="banner-mt">
-            {error.message}
-          </Banner>
-        ) : null}
+          {error && !serverShortfallCode && error.code !== 'TRADING_PAUSED' ? (
+            <Banner tone="shortfall" title="We couldn’t lock a price" role="alert" className="banner-mt">
+              {error.message}
+            </Banner>
+          ) : null}
 
-        {error?.code === 'TRADING_PAUSED' ? (
-          <Banner tone="paused" title="Trading paused before we could quote" role="alert" className="banner-mt">
-            {error.message}
-          </Banner>
-        ) : null}
+          {error?.code === 'TRADING_PAUSED' ? (
+            <Banner tone="paused" title="Trading paused before we could quote" role="alert" className="banner-mt">
+              {error.message}
+            </Banner>
+          ) : null}
+        </div>
       </div>
 
       <div className="page__foot">
@@ -333,6 +375,14 @@ export function TradeEntry({ side, busy, error, onSubmit }: TradeEntryProps): JS
               ? `You pay ${rs(result.pkr)} for about ${grams(result.gramsValue)} at ${rate(pricePerGram)}.`
               : `You sell ${grams(result.gramsValue)} for about ${rs(result.pkr)} at ${rate(pricePerGram)}.`}{' '}
             The server confirms the exact figures on the next screen.
+          </p>
+        ) : blockedReason ? (
+          <p className="legal legal--why" style={{ marginTop: 8 }}>
+            {blockedReason}
+          </p>
+        ) : emptyHint ? (
+          <p className="legal" style={{ marginTop: 8 }}>
+            {emptyHint}
           </p>
         ) : null}
       </div>

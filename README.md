@@ -116,7 +116,8 @@ code**, so the deployed UI carries a clearly-marked **Demo controls** panel:
 | Primary source down | Demo controls → *Fail primary source* → the price row switches to `goldprice` |
 | Both sources down | Demo controls → *Fail both sources* → trading pauses, CTAs disable, reason shown |
 | Guardrail engaged | Demo controls → *Raise guardrail* → buy price floors at the guardrail and says so |
-| Insufficient cash / gold / inventory | Demo controls → scenario *low cash* / *low gold* / *low inventory*, then try a trade |
+| Insufficient cash / gold | Demo controls → scenario *low cash* / *low gold*, then type an amount — the shortfall and the reason appear at once |
+| Insufficient inventory | Demo controls → scenario *low inventory*, then press Continue — Continue stays live, because only the server can answer this one |
 | Quote expired | Start a trade and let the 75s countdown run out, then press Confirm |
 | Confirm pressed twice | Double-click Confirm — one trade, same receipt |
 

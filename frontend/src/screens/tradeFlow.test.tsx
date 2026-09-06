@@ -162,7 +162,107 @@ describe('insufficiency is reported with the real shortfall', () => {
     await user.type(pkr, '50000');
     await user.click(screen.getByRole('button', { name: /Continue/i }));
 
-    expect(await screen.findByText(/out of gold to sell/i)).toBeInTheDocument();
+    expect(await screen.findByText(/unable to procure gold/i)).toBeInTheDocument();
+    expect(screen.getByText(/try again in a bit/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Where each of the three insufficiency answers comes from.
+ *
+ * Wallet and holdings are the customer's own numbers, so the client says so at
+ * once. Platform inventory is shared state the client cannot know is still
+ * true, so it must reach the server — a client that pre-empted it would refuse
+ * orders the platform could actually fill.
+ */
+describe('who decides an order cannot go through', () => {
+  it('answers a short wallet immediately, without asking the server', async () => {
+    const user = userEvent.setup();
+    const mock = renderBuy({
+      'GET /api/state': () =>
+        ok({ ...BASE_STATE, balances: { ...BASE_STATE.balances, pkr_wallet: '1500.00' } }),
+    });
+
+    const pkr = await screen.findByLabelText(/You pay in PKR/i);
+    await user.clear(pkr);
+    await user.type(pkr, '5000');
+
+    expect(await screen.findByText(/wallet is short/i)).toBeInTheDocument();
+    // The reason sits beside the button, not only in the banner above.
+    expect(screen.getByText(/Your wallet holds .*not enough for this trade/i)).toBeInTheDocument();
+    expect(mock.callsTo('/api/quote')).toHaveLength(0);
+  });
+
+  it('answers a short gold holding immediately, without asking the server', async () => {
+    const user = userEvent.setup();
+    const mock = installFetchMock({
+      'GET /api/state': () =>
+        ok({
+          ...BASE_STATE,
+          balances: { ...BASE_STATE.balances, customer_gold_g: '0.0500' },
+        }),
+    });
+    render(
+      <AppDataProvider>
+        <TradeFlow side="SELL" onExit={() => {}} />
+      </AppDataProvider>,
+    );
+
+    const g = await screen.findByLabelText(/You sell in grams/i);
+    await user.clear(g);
+    await user.type(g, '0.5');
+
+    expect(await screen.findByText(/don’t hold that much gold/i)).toBeInTheDocument();
+    expect(screen.getByText(/You hold .*not enough for this sale/i)).toBeInTheDocument();
+    expect(mock.callsTo('/api/quote')).toHaveLength(0);
+  });
+
+  it('sends the order even when the platform looks short, and reports the server’s answer', async () => {
+    const user = userEvent.setup();
+    const mock = renderBuy({
+      'GET /api/state': () =>
+        ok({
+          ...BASE_STATE,
+          balances: { ...BASE_STATE.balances, platform_gold_g: '0.0500' },
+        }),
+      'POST /api/quote': () =>
+        apiError(409, 'INSUFFICIENT_INVENTORY', 'Only 0.0500 g available.', {
+          required: '0.1149',
+          available: '0.0500',
+          shortfall: '0.0649',
+        }),
+    });
+
+    const pkr = await screen.findByLabelText(/You pay in PKR/i);
+    await user.clear(pkr);
+    await user.type(pkr, '5000');
+
+    const cta = screen.getByRole('button', { name: /Continue/i });
+    expect(cta).toBeEnabled();
+    await user.click(cta);
+
+    expect(await screen.findByText(/unable to procure gold/i)).toBeInTheDocument();
+    expect(mock.callsTo('/api/quote')).toHaveLength(1);
+  });
+
+  it('drops the server rejection once the amount it referred to has changed', async () => {
+    const user = userEvent.setup();
+    renderBuy({
+      'POST /api/quote': () =>
+        apiError(409, 'INSUFFICIENT_INVENTORY', 'Only 0.0500 g available.', {}),
+    });
+
+    const pkr = await screen.findByLabelText(/You pay in PKR/i);
+    await user.clear(pkr);
+    await user.type(pkr, '5000');
+    await user.click(screen.getByRole('button', { name: /Continue/i }));
+    await screen.findByText(/unable to procure gold/i);
+
+    await user.type(pkr, '0');
+
+    await waitFor(() =>
+      expect(screen.queryByText(/unable to procure gold/i)).not.toBeInTheDocument(),
+    );
   });
 });
 

@@ -1,11 +1,28 @@
 import type { QuoteRequest, ShortfallDetails, Side } from '../api/types';
-import type { ShortfallCode } from '../components/ShortfallNotice';
 import { GRAM_DP, PKR_DP, ceilTo, floorTo, num, parseAmount } from './convert';
 
 /** Which side of the pair the user is typing into. */
 export type EntryMode = 'PKR' | 'GRAMS';
 
-export type EntryBlock = ShortfallCode | 'AMOUNT_BELOW_MINIMUM' | 'AMOUNT_ABOVE_MAXIMUM';
+/**
+ * What the client refuses to send on its own.
+ *
+ * The customer's own two constraints — wallet cash and gold holdings — stay
+ * here. We already hold both numbers, they only move when *this* user trades,
+ * and telling someone their wallet is short is faster and clearer than a round
+ * trip. The server re-checks both anyway, under a row lock, so this is a
+ * courtesy and never the guarantee.
+ *
+ * Platform inventory is deliberately **absent**. It is a shared resource: it
+ * can move for reasons that have nothing to do with this user, between the last
+ * `/api/state` read and the tap. The client cannot know it, so it must not
+ * pretend to — `INSUFFICIENT_INVENTORY` only ever arrives from the server.
+ */
+export type EntryBlock =
+  | 'INSUFFICIENT_PKR'
+  | 'INSUFFICIENT_GOLD'
+  | 'AMOUNT_BELOW_MINIMUM'
+  | 'AMOUNT_ABOVE_MAXIMUM';
 
 export interface EntryInputs {
   side: Side;
@@ -16,7 +33,6 @@ export interface EntryInputs {
   pricePerGram: number;
   walletPkr: number;
   customerGoldG: number;
-  platformGoldG: number;
   minPkr: number;
   maxPkr: number;
 }
@@ -30,9 +46,9 @@ export interface EntryResult {
   gramsValue: number;
   /** True when a quote may be requested. */
   canSubmit: boolean;
-  /** Set when something blocks the trade before we even ask the server. */
+  /** Set when the client can already tell this trade cannot go through. */
   block: EntryBlock | null;
-  /** Populated for the three insufficiency blocks. */
+  /** Populated for the two shortfall blocks. */
   details: ShortfallDetails;
   /** Inline copy for limit blocks. */
   message: string | null;
@@ -65,17 +81,8 @@ const empty = (): EntryResult => ({
  * These are display-only. The binding numbers arrive with the quote.
  */
 export function evaluateEntry(inputs: EntryInputs): EntryResult {
-  const {
-    side,
-    mode,
-    raw,
-    pricePerGram,
-    walletPkr,
-    customerGoldG,
-    platformGoldG,
-    minPkr,
-    maxPkr,
-  } = inputs;
+  const { side, mode, raw, pricePerGram, walletPkr, customerGoldG, minPkr, maxPkr } =
+    inputs;
 
   const entered = parseAmount(raw);
   if (entered === null || entered <= 0 || !(pricePerGram > 0)) {
@@ -122,32 +129,20 @@ export function evaluateEntry(inputs: EntryInputs): EntryResult {
     };
   }
 
-  // Balance guards. Blocked here so the user is not sent to a quote that can
-  // only be rejected — the server enforces the same rules authoritatively.
-  if (side === 'BUY') {
-    if (pkr > walletPkr) {
-      return {
-        ...base,
-        block: 'INSUFFICIENT_PKR',
-        details: {
-          required: pkr.toFixed(PKR_DP),
-          available: walletPkr.toFixed(PKR_DP),
-          shortfall: (pkr - walletPkr).toFixed(PKR_DP),
-        },
-      };
-    }
-    if (gramsValue > platformGoldG) {
-      return {
-        ...base,
-        block: 'INSUFFICIENT_INVENTORY',
-        details: {
-          required: gramsValue.toFixed(GRAM_DP),
-          available: platformGoldG.toFixed(GRAM_DP),
-          shortfall: (gramsValue - platformGoldG).toFixed(GRAM_DP),
-        },
-      };
-    }
-  } else if (gramsValue > customerGoldG) {
+  // The customer's own two constraints. Blocked here with the exact shortfall
+  // so the reason is on screen immediately — never a silent dead button.
+  if (side === 'BUY' && pkr > walletPkr) {
+    return {
+      ...base,
+      block: 'INSUFFICIENT_PKR',
+      details: {
+        required: pkr.toFixed(PKR_DP),
+        available: walletPkr.toFixed(PKR_DP),
+        shortfall: (pkr - walletPkr).toFixed(PKR_DP),
+      },
+    };
+  }
+  if (side === 'SELL' && gramsValue > customerGoldG) {
     return {
       ...base,
       block: 'INSUFFICIENT_GOLD',
@@ -159,6 +154,8 @@ export function evaluateEntry(inputs: EntryInputs): EntryResult {
     };
   }
 
+  // Whether the platform can actually source the gold is the server's call, so
+  // Continue stays live and the user gets a real answer rather than a refusal.
   return { ...base, canSubmit: true };
 }
 

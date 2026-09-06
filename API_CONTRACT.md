@@ -230,6 +230,20 @@ Rejections (pre-quote validation — block early, with the shortfall, never a ge
 | 409 | `INSUFFICIENT_GOLD` | SELL > customer gold; same `details` shape (grams) |
 | 409 | `INSUFFICIENT_INVENTORY` | BUY grams > platform inventory; same `details` shape (grams) |
 
+**Where each check lives.** All seven are enforced here, server-side, and the
+three balance ones are enforced a second time inside the settle transaction
+under the `FOR UPDATE` row lock — the server is always the authority.
+
+The client additionally pre-empts two of them, `INSUFFICIENT_PKR` and
+`INSUFFICIENT_GOLD`, so the customer sees their own shortfall without waiting
+for a round trip. It must **never** pre-empt `INSUFFICIENT_INVENTORY`: platform
+inventory is shared state that can move for reasons unrelated to this user, so a
+client that guessed it would refuse orders the platform could actually fill.
+That answer only ever comes from this endpoint.
+
+A rejection is never surfaced as a disabled button alone — the reason and the
+numbers are always on screen.
+
 Quote lives in Redis, key `quote:{sid}:{quote_id}`, **TTL 75s**, payload **includes `expires_at`**.
 
 ### `POST /api/confirm`

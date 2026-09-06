@@ -70,20 +70,21 @@ export function tolaToGrams(tola: number): number {
 }
 
 /**
- * Largest whole-PKR amount the customer can spend on a BUY, given their wallet,
- * the platform's remaining inventory and the trade maximum. Used for the
- * "Max buy 0.661 g" hint and to keep the entry screen from proposing an amount
- * that the server would only reject.
+ * Largest whole-PKR amount the customer can spend on a BUY, given their wallet
+ * and the trade maximum. Drives the "Max buy 0.661 g" hint.
+ *
+ * Deliberately ignores the platform's remaining inventory: that is a shared
+ * number the client cannot know is still true, so quoting a max derived from it
+ * would be a guess dressed up as a fact. The server decides whether it can fill
+ * the order.
  */
 export function maxBuyPkr(
   walletPkr: number,
-  platformGoldG: number,
   buyPricePerGram: number,
   maxTradePkr: number,
 ): number {
-  const inventoryCap =
-    buyPricePerGram > 0 ? floorTo(platformGoldG * buyPricePerGram, PKR_DP) : 0;
-  return floorTo(Math.max(0, Math.min(walletPkr, inventoryCap, maxTradePkr)), PKR_DP);
+  if (!(buyPricePerGram > 0)) return 0;
+  return floorTo(Math.max(0, Math.min(walletPkr, maxTradePkr)), PKR_DP);
 }
 
 /** Largest gram amount the customer can sell: their holdings, capped by the PKR maximum. */

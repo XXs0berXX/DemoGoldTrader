@@ -147,6 +147,7 @@ export function TradeFlow({ side, onExit }: TradeFlowProps): JSX.Element {
         busy={quoting}
         error={entryError}
         onSubmit={(req) => void requestQuote(req, 'entry')}
+        onClearError={() => setEntryError(null)}
       />
     </>
   );

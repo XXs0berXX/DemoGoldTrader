@@ -434,6 +434,14 @@
   margin-bottom: 1px;
 }
 
+/* Secondary line inside a banner: the numbers behind the headline sentence. */
+.banner__detail {
+  display: block;
+  margin-top: 6px;
+  opacity: 0.85;
+  font-size: 12px;
+}
+
 .banner--paused {
   background: var(--warn-100);
   border-color: var(--warn-line);
@@ -1385,4 +1393,10 @@
   margin: 6px 0 0;
   font-size: 11.5px;
   color: var(--ink-400);
+}
+
+/* The one-line reason a disabled primary action is disabled. */
+.legal--why {
+  color: var(--danger-700);
+  font-weight: 600;
 }

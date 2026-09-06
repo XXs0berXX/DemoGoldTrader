@@ -58,7 +58,6 @@ function inputs(overrides: Partial<EntryInputs> = {}): EntryInputs {
     pricePerGram: BUY_PRICE,
     walletPkr: 250000,
     customerGoldG: 6.842,
-    platformGoldG: 100,
     minPkr: 1000,
     maxPkr: 50000,
     ...overrides,
@@ -121,18 +120,13 @@ describe('evaluateEntry — guards', () => {
 
   it('blocks a BUY the wallet cannot cover, with the shortfall', () => {
     const r = evaluateEntry(inputs({ raw: '5000', walletPkr: 1500 }));
+    expect(r.canSubmit).toBe(false);
     expect(r.block).toBe('INSUFFICIENT_PKR');
     expect(r.details).toEqual({
       required: '5000.00',
       available: '1500.00',
       shortfall: '3500.00',
     });
-  });
-
-  it('blocks a BUY the platform cannot fill, with the shortfall in grams', () => {
-    const r = evaluateEntry(inputs({ raw: '5000', platformGoldG: 0.05 }));
-    expect(r.block).toBe('INSUFFICIENT_INVENTORY');
-    expect(r.details.shortfall).toBe('0.0649');
   });
 
   it('blocks a SELL bigger than the customer holds', () => {
@@ -145,12 +139,27 @@ describe('evaluateEntry — guards', () => {
         customerGoldG: 0.05,
       }),
     );
+    expect(r.canSubmit).toBe(false);
     expect(r.block).toBe('INSUFFICIENT_GOLD');
     expect(r.details).toEqual({
       required: '0.5000',
       available: '0.0500',
       shortfall: '0.4500',
     });
+  });
+
+  /* Platform inventory is a shared number the client cannot know is still true.
+     Guessing it would mean refusing an order the platform may well be able to
+     fill, so the request goes and the server answers. */
+  it('does not pre-judge platform inventory — the request still goes to the server', () => {
+    const r = evaluateEntry(inputs({ raw: '50000' }));
+    expect(r.canSubmit).toBe(true);
+    expect(r.block).toBeNull();
+    expect(r.request).toEqual({ side: 'BUY', pkr_amount: '50000.00' });
+  });
+
+  it('takes no platform balance as an input at all', () => {
+    expect(Object.keys(inputs())).not.toContain('platformGoldG');
   });
 
   it('cannot submit with no price', () => {
