@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Banner } from '../components/Banner';
 import { RateChart } from '../components/RateChart';
 import { FreshnessLine, SourceTag } from '../components/SourceTag';
 import {
   BuyGoldIcon,
+  EyeIcon,
   EyeOffIcon,
   InfoIcon,
   SellGoldIcon,
@@ -13,6 +15,9 @@ import { num } from '../lib/convert';
 import { formatGrams, grams, rate, rs } from '../lib/format';
 import { useAppData } from '../state/AppDataProvider';
 import type { TabId } from '../components/TabBar';
+
+/** What stands in for a balance while it is hidden. */
+const MASK = '*****';
 
 function greeting(now: number): string {
   const h = new Date(now).getHours();
@@ -27,6 +32,10 @@ interface HomeScreenProps {
 
 export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
   const { price, state, tradingEnabled, now, connectionError } = useAppData();
+  // Balance privacy — the classic "someone is looking over my shoulder" toggle.
+  // Purely a display concern: the values are still fetched and still drive the
+  // trade screens, they are just not rendered here.
+  const [balancesHidden, setBalancesHidden] = useState(false);
 
   const balances = state?.balances;
   const goldG = num(balances?.customer_gold_g);
@@ -56,7 +65,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
           <div>
             <p className="hero__eyebrow">My gold</p>
             <div className="hero__amount num">
-              {balances ? formatGrams(balances.customer_gold_g, 3) : '—'}
+              {balancesHidden ? MASK : balances ? formatGrams(balances.customer_gold_g, 3) : '—'}
               <span className="hero__unit">grams</span>
             </div>
           </div>
@@ -64,14 +73,26 @@ export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
             <span className="hero__iconbtn" aria-hidden="true">
               <InfoIcon />
             </span>
-            <span className="hero__iconbtn" aria-hidden="true">
-              <EyeOffIcon />
-            </span>
+            <button
+              type="button"
+              className="hero__iconbtn"
+              onClick={() => setBalancesHidden((v) => !v)}
+              aria-pressed={balancesHidden}
+              aria-label={balancesHidden ? 'Show balances' : 'Hide balances'}
+              title={balancesHidden ? 'Show balances' : 'Hide balances'}
+            >
+              {balancesHidden ? <EyeIcon /> : <EyeOffIcon />}
+            </button>
           </div>
         </div>
 
         <p className="hero__sub">
-          {holdingsValue !== null ? (
+          {balancesHidden ? (
+            <>
+              Current value: <strong className="num">{MASK}</strong>
+              <span>at today’s sell rate</span>
+            </>
+          ) : holdingsValue !== null ? (
             <>
               Current value: <strong className="num">{rs(holdingsValue)}</strong>
               <span>at today’s sell rate</span>
@@ -87,7 +108,7 @@ export function HomeScreen({ onNavigate }: HomeScreenProps): JSX.Element {
           <div>
             <p className="hero__eyebrow">My wallet</p>
             <div className="hero__wallet num">
-              {balances ? rs(balances.pkr_wallet) : '—'}
+              {balancesHidden ? MASK : balances ? rs(balances.pkr_wallet) : '—'}
             </div>
             <p className="hero__note">Available to save in gold</p>
           </div>

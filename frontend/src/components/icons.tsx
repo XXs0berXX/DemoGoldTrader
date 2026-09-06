@@ -67,6 +67,15 @@ export function BellIcon({ size = 21, className }: IconProps): JSX.Element {
   );
 }
 
+export function EyeIcon({ size = 17, className }: IconProps): JSX.Element {
+  return (
+    <svg {...svgProps(size, className)}>
+      <path d="M2.6 11.3a1 1 0 0 0 0 1.4C3.7 14.3 7.1 18.4 12 18.4s8.3-4.1 9.4-5.7a1 1 0 0 0 0-1.4C20.3 9.7 16.9 5.6 12 5.6S3.7 9.7 2.6 11.3Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export function EyeOffIcon({ size = 17, className }: IconProps): JSX.Element {
   return (
     <svg {...svgProps(size, className)}>
